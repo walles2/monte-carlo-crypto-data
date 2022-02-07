@@ -35,7 +35,7 @@ SELECT DISTINCT(METRIC) FROM {TABLE}
 """
 
 GET_METRIC_TIMESERIES_DATA_QUERY = f"""
-SELECT timestamp,value,metric FROM {TABLE} 
+SELECT timestamp,value,metric,market_name FROM {TABLE} 
 WHERE metric = '{{metric_name}}' and {WITHIN_LAST_DAY_EXPRESSION}
 """
 
@@ -59,7 +59,7 @@ RESULT_PATH = "s3://scott-waller-bucket/athena_query_results/"
 ATHENA_TYPE_TO_PYTHON_TYPE = {
     "varchar": lambda x: x,
     "double": lambda x: float(x),
-    "timestamp": lambda x: datetime.fromisoformat(x)
+    "timestamp": lambda x: str(datetime.fromisoformat(x))
 }
 
 
@@ -114,7 +114,6 @@ def _run_athena_query(sql):
     result_set = result_response['ResultSet']
     columns = [Column(column['Name'], column['Type'], ATHENA_TYPE_TO_PYTHON_TYPE[column['Type']]) 
                for column in result_set['ResultSetMetadata']['ColumnInfo']]
-    import ipdb; ipdb.set_trace()
     data = result_set["Rows"][1:] # The first row is a "header" row
     rows = [{column.name: column.formatter(value_dict['VarCharValue']) for column, value_dict in zip(columns, row['Data'])} for row in data]
     return rows
