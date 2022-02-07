@@ -1,2 +1,4 @@
 ipdb==0.13.9
 ipython==8.0.1
+pandas # use from the aws provided layer
+pyarrow # use from the aws provided layer
