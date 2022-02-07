@@ -41,14 +41,22 @@ ORDER BY TIMESTAMP DESC
 """
 
 GET_METRIC_RANK_QUERY = f"""
-SELECT STDDEV(value)/(
-    SELECT MAX(value_stddev) AS max_stddev FROM (
+WITH metric_ranks AS (
+    WITH metric_to_standard_dev AS (
         SELECT STDDEV(value) AS value_stddev, metric FROM {TABLE} 
         WHERE {WITHIN_LAST_DAY_EXPRESSION}
         GROUP BY metric
-    ) 
-) AS metric_rank FROM {TABLE} 
- WHERE metric = '{{metric_name}}' and {WITHIN_LAST_DAY_EXPRESSION}
+    )
+    SELECT DENSE_RANK() OVER (ORDER BY value_stddev desc) AS metric_rank, metric
+    FROM metric_to_standard_dev
+)
+
+SELECT metric, metric_rank FROM metric_ranks
+WHERE metric = '{{metric_name}}'
+"""
+
+GET_DISTINCT_NAMES_COUNT = f"""
+SELECT COUNT(DISTINCT(METRIC)) as total_count FROM {TABLE}
 """
 
 # Execution Constants
@@ -60,7 +68,8 @@ RESULT_PATH = "s3://scott-waller-bucket/athena_query_results/"
 ATHENA_TYPE_TO_PYTHON_TYPE = {
     "varchar": lambda x: x,
     "double": lambda x: float(x),
-    "timestamp": lambda x: str(datetime.fromisoformat(x))
+    "timestamp": lambda x: str(datetime.fromisoformat(x)),
+    "bigint": lambda x: int(x)
 }
 
 
@@ -136,5 +145,10 @@ def get_metric_timeseries_data(metric_name):
 
 
 def get_metric_rank(metric_name):
-    query = GET_METRIC_RANK_QUERY.format(metric_name=metric_name)
-    return _run_athena_query(query)
+    rank_query = GET_METRIC_RANK_QUERY.format(metric_name=metric_name)
+    rank_results = _run_athena_query(rank_query)
+
+    count_query = GET_DISTINCT_NAMES_COUNT
+    count_result = _run_athena_query(count_query)
+
+    return [row for row in [*count_result, *rank_results]]
